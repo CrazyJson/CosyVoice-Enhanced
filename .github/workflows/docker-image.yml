@@ -1,0 +1,43 @@
+name: Build and Push Image
+on: [ push ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 拉取仓库代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 配置Docker Buildx（增强构建能力）
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Generate timestamp tag
+        id: generate_tag
+        run: |
+          # 生成格式：YYYYMMDDHHMMSS（年月日时分秒）
+          TIMESTAMP=$(date +'%Y%m%d%H%M%S')
+          # 将时间戳输出为GitHub Actions环境变量，供后续步骤使用
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      # 3. 登录阿里云镜像仓库（核心步骤）
+      - name: Login to Aliyun Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ALIYUN_REGISTRY }}
+          username: ${{ secrets.ALIYUN_REGISTRY_USER }}
+          password: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
+          
+      # 4. 构建并推送到阿里云仓库
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: . 
+          file: ./docker/Dockerfile 
+          push: true  # 开启推送
+          # 镜像标签：阿里云仓库格式 → 仓库地址/命名空间/镜像名:版本
+          tags: ${{ secrets.ALIYUN_REGISTRY }}/${{secrets.ALIYUN_NAME_SPACE}}/cosyvoice-api:${{ steps.generate_tag.outputs.TIMESTAMP }}
+          # 启用缓存加速后续构建
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
